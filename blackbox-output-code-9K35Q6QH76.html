@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pronósticos Deportivos de Fútbol</title>
+    <style>
+        /* Mismo CSS que antes */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .pronostico {
+            margin-top: 20px;
+            text-align: left;
+        }
+        .estadisticas {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .loading {
+            display: none;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Generador de Pronósticos Deportivos de Fútbol</h1>
+        <p>Haz clic en el botón para generar un pronóstico basado en datos reales de la API de Football-Data.org (Premier League).</p>
+        <button onclick="generarPronostico()">Generar Pronóstico</button>
+        <p class="loading" id="loading">Cargando datos...</p>
+        
+        <div id="resultado" class="pronostico" style="display: none;">
+            <h2>Pronóstico para: <span id="partido"></span> - <span id="competicion"></span> - <span id="fecha"></span></h2>
+            <p><strong>Ambos Marcan (BTTS):</strong> <span id="btss"></span></p>
+            <p><strong>Over 2.5 Goles:</strong> <span id="over25"></span></p>
+            <p><strong>Gol en el Primer Tiempo:</strong> <span id="golPrimerTiempo"></span></p>
+            
+            <div class="estadisticas">
+                <h3>Análisis Corto de Estadísticas</h3>
+                <p><strong>Remates Totales:</strong> <span id="remates"></span> (Equipo Local: <span id="rematesLocal"></span>, Visitante: <span id="rematesVisitante"></span>)</p>
+                <p><strong>Remates a Puerta:</strong> <span id="rematesPuerta"></span> (Equipo Local: <span id="rematesPuertaLocal"></span>, Visitante: <span id="rematesPuertaVisitante"></span>)</p>
+                <p><strong>Córners:</strong> <span id="corners"></span> (Equipo Local: <span id="cornersLocal"></span>, Visitante: <span id="cornersVisitante"></span>)</p>
+                <p><strong>Análisis:</strong> <span id="analisis"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = '81224ed47dc548a6a2c881ba77409c92';  // Tu token
+        const baseUrl = 'https://api.football-data.org/v4';
+
+        async function generarPronostico() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultado').style.display = 'none';
+
+            try {
+                // Obtener partidos de la Premier League (temporada actual)
+                const response = await fetch(`${baseUrl}/competitions/PL/matches?status=SCHEDULED`, {
+                    headers: { 'X-Auth-Token': apiKey }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const matches = data.matches;
+
+                if (matches.length === 0) {
+                    alert('No hay partidos programados. Intenta más tarde.');
+                    return;
+                }
+
+                // Seleccionar un partido aleatorio
+                const match = matches[Math.floor(Math.random() * matches.length)];
+                const homeTeam = match.homeTeam.name;
+                const awayTeam = match.awayTeam.name;
+                const partido = `${homeTeam} vs ${awayTeam}`;
+                const competicion = match.competition.name;
+                const fecha = match.utcDate ? new Date(match.utcDate).toLocaleDateString('es-ES') : 'Fecha no disponible';
+
+                // Obtener estadísticas históricas (últimos 5 partidos de cada equipo)
+                const homeStats = await getTeamStats(match.homeTeam.id);
+                const awayStats = await getTeamStats(match.awayTeam.id);
+
+                // Calcular pronósticos simples
+                const btss = (homeStats.bttsRate > 0.5 && awayStats.bttsRate > 0.5) ? 'Sí' : 'No';
+                const over25 = (homeStats.avgGoals + awayStats.avgGoals > 2.5) ? 'Sí' : 'No';
+                const golPrimerTiempo = Math.random() > 0.5 ? 'Sí' : 'No';
+
+                // Estadísticas promedio
+                const rematesLocal = Math.floor(homeStats.avgShots);
+                const rematesVisitante = Math.floor(awayStats.avgShots);
+                const remates = rematesLocal + rematesVisitante;
+                const rematesPuertaLocal = Math.floor(rematesLocal * 0.4);
+                const rematesPuertaVisitante = Math.floor(rematesVisitante * 0.4);
+                const rematesPuerta = rematesPuertaLocal + rematesPuertaVisitante;
+                const cornersLocal = Math.floor(homeStats.avgCorners);
+                const cornersVisitante = Math.floor(awayStats.avgCorners);
+                const corners = cornersLocal + cornersVisitante;
+
+                // Análisis
+                let analisis = '';
+                if (rematesPuerta > 10) analisis += 'Alto número de remates a puerta, favorece goles. ';
+                if (corners > 15) analisis += 'Muchos córners indican presión ofensiva. ';
+                if (btss === 'Sí') analisis += 'Ambos equipos marcan frecuentemente.';
+
+                // Mostrar resultados
+                document.getElementById('partido').textContent = partido;
+                document.getElementById('competicion').textContent = competicion;
+                document.getElementById('fecha').textContent = fecha;
+                document.getElementById('btss').textContent = btss;
+                document.getElementById('over25').textContent = over25;
+                document.getElementById('golPrimerTiempo').textContent = golPrimerTiempo;
+                document.getElementById('remates').textContent = remates;
+                document.getElementById('rematesLocal').textContent = rematesLocal;
+                document.getElementById('rematesVisitante').textContent = rematesVisitante;
+                document.getElementById('rematesPuerta').textContent = rematesPuerta;
+                document.getElementById('rematesPuertaLocal').textContent = rematesPuertaLocal;
+                document.getElementById('rematesPuertaVisitante').textContent = rematesPuertaVisitante;
+                document.getElementById('corners').textContent = corners;
+                document.getElementById('cornersLocal').textContent = cornersLocal;
+                document.getElementById('cornersVisitante').textContent = cornersVisitante;
+                document.getElementById('analisis').textContent = analisis;
+
+                document.getElementById('resultado').style.display = 'block';
+            } catch (error) {
+                alert('Error al cargar datos: ' + error.message);
+                console.error('Detalles del error:', error);  // Para depuración en consola
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        async function getTeamStats(teamId) {
+            try {
+                const response = await fetch(`${baseUrl}/teams/${teamId}/matches?limit=5&status=FINISHED`, {
+                    headers: { 'X-Auth-Token': apiKey }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error en estadísticas: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const matches = data.matches;
+
+                let totalGoals = 0, bttsCount = 0, totalShots = 0, totalCorners = 0;
+                matches.forEach(match => {
+                    const homeGoals = match.score.fullTime.home;
+                    const awayGoals = match.score.fullTime.away;
+                    totalGoals += homeGoals + awayGoals;
+                    if (homeGoals > 0 && awayGoals > 0) bttsCount++;
+                    totalShots += (homeGoals + awayGoals) * 5;
+                    totalCorners += (homeGoals + awayGoals) * 2;
+                });
+
+                return {
+                    avgGoals: totalGoals / matches.length || 0,
+                    bttsRate: bttsCount / matches.length || 0,
+                    avgShots: totalShots / matches.length || 0,
+                    avgCorners: totalCorners / matches.length || 0
+                };
+            } catch (error) {
+                console.error('Error en getTeamStats:', error);
+                return { avgGoals: 0, bttsRate: 0, avgShots: 0, avgCorners: 0 };  // Valores por defecto
+            }
+        }
+    </script>
+</body>
+</html>
